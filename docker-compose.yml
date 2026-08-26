@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  mysqldb:
+    image: mysql:8.0
+    container_name: mysqldb
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: nexspend_db
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+
+  app:
+    build: .
+    container_name: NexSpend
+    ports:
+      - "8081:8080"
+    depends_on:
+      - mysqldb
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      APP_BASE_URL: ${APP_BASE_URL}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+
+volumes:
+  mysql_data:

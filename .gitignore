@@ -1,0 +1,35 @@
+HELP.md
+.env
+target/
+mysql_data/
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
+# Keep Maven wrapper source/config if needed
+!.mvn/wrapper/maven-wrapper.properties
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
