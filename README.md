@@ -1,4 +1,4 @@
-# # NexSpend — Smart Expense & Finance Management System
+# NexSpend — Smart Expense & Finance Management System
 
 NexSpend is a full-stack **expense tracking and personal finance management application** built using **Spring Boot, Spring Security, JWT, MySQL, JPA/Hibernate, HTML, CSS, and JavaScript**.
 
