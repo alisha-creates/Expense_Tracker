@@ -29,6 +29,22 @@ public class RecurringExpenseController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<RecurringExpenseResponseDTO> updateRecurring(
+            @PathVariable Long id,
+            @Valid @RequestBody RecurringExpenseRequestDTO dto,
+            Authentication authentication) {
+
+        RecurringExpenseResponseDTO response =
+                recurringService.updateRecurring(
+                        id,
+                        dto,
+                        authentication
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping
     public ResponseEntity<List<RecurringExpenseResponseDTO>> getUserRecurring(
             Authentication authentication) {
@@ -37,5 +53,18 @@ public class RecurringExpenseController {
                 recurringService.getUserRecurring(authentication);
 
         return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteRecurring(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        recurringService.deleteRecurring(
+                id,
+                authentication
+        );
+
+        return ResponseEntity.noContent().build();
     }
 }

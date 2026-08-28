@@ -9,11 +9,15 @@ import org.springframework.security.core.Authentication;
 import java.util.List;
 
 public interface BudgetService {
-    BudgetResponseDTO createOrUpdateBudget(BudgetRequestDTO dto, Authentication authentication);
+    BudgetResponseDTO createBudget(BudgetRequestDTO dto, Authentication authentication);
+
+    BudgetResponseDTO updateBudget(Long id, BudgetRequestDTO dto, Authentication authentication);
 
     List<BudgetResponseDTO> getUserBudgets(Authentication authentication);
 
     List<BudgetResponseDTO> getCurrentMonthBudgets(Authentication authentication);
 
     List<BudgetAlertDTO> checkBudgetAlerts(User user);
+
+    void deleteBudget(Long id, Authentication authentication);
 }

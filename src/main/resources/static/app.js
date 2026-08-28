@@ -212,38 +212,73 @@
         `/api/expenses/filter?${new URLSearchParams(q)}&page=0&size=50`
       ),
 
-
-    budgets: () =>
-      api.request('/api/budgets'),
-
-
-    currentBudgets: () =>
-      api.request('/api/budgets/current-month'),
+        budgets: () =>
+          api.request('/api/budgets'),
 
 
-    saveBudget: b =>
-      api.request(
-        '/api/budgets',
-        {
-          method: 'POST',
-          body: JSON.stringify(b)
-        }
-      ),
+        currentBudgets: () =>
+          api.request('/api/budgets/current-month'),
 
 
-    recurring: () =>
-      api.request('/api/recurring'),
+        saveBudget: b =>
+          api.request(
+            '/api/budgets',
+            {
+              method: 'POST',
+              body: JSON.stringify(b)
+            }
+          ),
 
 
-    createRecurring: b =>
-      api.request(
-        '/api/recurring',
-        {
-          method: 'POST',
-          body: JSON.stringify(b)
-        }
-      ),
+        updateBudget: (id, b) =>
+          api.request(
+            `/api/budgets/${id}`,
+            {
+              method: 'PUT',
+              body: JSON.stringify(b)
+            }
+          ),
 
+
+        deleteBudget: id =>
+          api.request(
+            `/api/budgets/${id}`,
+            {
+              method: 'DELETE'
+            }
+          ),
+
+        recurring: () =>
+          api.request('/api/recurring'),
+
+
+        createRecurring: b =>
+          api.request(
+            '/api/recurring',
+            {
+              method: 'POST',
+              body: JSON.stringify(b)
+            }
+          ),
+
+
+        updateRecurring: (id, b) =>
+          api.request(
+            `/api/recurring/${id}`,
+            {
+              method: 'PUT',
+              body: JSON.stringify(b)
+            }
+          ),
+
+
+        deleteRecurring: id =>
+          api.request(
+            `/api/recurring/${id}`,
+            {
+              method: 'DELETE'
+            }
+          ),
 
     me: () =>
       api.request('/api/users/me'),
@@ -261,7 +296,6 @@
 
     // ---------------------------------------------------------
     // CHANGE PASSWORD
-    // Existing /api/users/... structure — no new auth API.
     // ---------------------------------------------------------
     changePassword: (id, b) =>
       api.request(
@@ -412,12 +446,6 @@
       )
       .join('');
 
-
-  // ---------------------------------------------------------
-  // EYE ICON (password visibility toggle)
-  // open = true  -> eye with a slash (password is visible)
-  // open = false -> plain eye (password is hidden)
-  // ---------------------------------------------------------
   function eyeIcon(open) {
 
     return open
@@ -433,12 +461,6 @@
 
   }
 
-
-  // ---------------------------------------------------------
-  // Wires up every .pw-toggle button currently in the DOM.
-  // Safe to call repeatedly (e.g. after re-rendering a page) —
-  // it just (re)assigns onclick, no duplicate listeners pile up.
-  // ---------------------------------------------------------
   function wirePasswordToggles(root = document) {
 
     root.querySelectorAll('.pw-toggle').forEach(btn => {
@@ -1679,209 +1701,877 @@
      BUDGETS
      ========================================================= */
 
-  async function renderBudgets() {
+    async function renderBudgets() {
 
-    const items = await api.budgets();
-    const now = new Date();
+      const items = await api.budgets();
 
-
-    $('#page').innerHTML = `
-
-      <section class="panel">
-        <form id="budget-form" class="toolbar">
-
-          <label>
-            Category
-            <select name="category">${options(CATEGORIES)}</select>
-          </label>
-
-          <label>
-            Monthly limit
-            <input name="amount" type="number" min="0.01" step="0.01" required>
-          </label>
-
-          <label>
-            Month
-            <input name="month" type="number" min="1" max="12" value="${now.getMonth() + 1}" required>
-          </label>
-
-          <label>
-            Year
-            <input name="year" type="number" value="${now.getFullYear()}" required>
-          </label>
-
-          <button class="primary">Save budget</button>
-
-        </form>
-      </section>
+      const now = new Date();
 
 
-      <section class="panel" style="margin-top:16px">
+      $('#page').innerHTML = `
 
-        <h3>All budgets</h3>
+        <section class="panel">
 
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Period</th>
-                <th>Category</th>
-                <th>Budget</th>
-                <th>Spent</th>
-                <th>Remaining</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${items.map(x => `
+          <form id="budget-form" class="toolbar">
+
+            <input type="hidden" name="id">
+
+
+            <label>
+              Category
+              <select name="category">
+                ${options(CATEGORIES)}
+              </select>
+            </label>
+
+
+            <label>
+              Monthly limit
+              <input
+                name="amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+              >
+            </label>
+
+
+            <label>
+              Month
+              <input
+                name="month"
+                type="number"
+                min="1"
+                max="12"
+                value="${now.getMonth() + 1}"
+                required
+              >
+            </label>
+
+
+            <label>
+              Year
+              <input
+                name="year"
+                type="number"
+                value="${now.getFullYear()}"
+                required
+              >
+            </label>
+
+
+            <button class="primary" id="budget-submit">
+              Save budget
+            </button>
+
+
+            <button
+              type="button"
+              id="budget-reset"
+            >
+              Clear
+            </button>
+
+          </form>
+
+        </section>
+
+
+        <section
+          class="panel"
+          style="margin-top:16px"
+        >
+
+          <div class="panel-header">
+
+            <div>
+              <h3>All budgets</h3>
+              <p class="panel-subtitle">
+                Manage your monthly spending limits
+              </p>
+            </div>
+
+          </div>
+
+
+          <div class="table-wrap">
+
+            <table>
+
+              <thead>
+
                 <tr>
-                  <td>${x.month}/${x.year}</td>
-                  <td>${escape(x.category)}</td>
-                  <td>${money(x.amount)}</td>
-                  <td>${money(x.spent)}</td>
-                  <td>${money(x.remaining)}</td>
+                  <th>Period</th>
+                  <th>Category</th>
+                  <th>Budget</th>
+                  <th>Spent</th>
+                  <th>Remaining</th>
+                  <th>Actions</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
 
-      </section>
-
-    `;
+              </thead>
 
 
-    $('#budget-form').onsubmit = async e => {
+              <tbody>
+
+                ${
+                  items.length
+                    ? items.map(x => `
+
+                        <tr>
+
+                          <td>
+                            ${x.month}/${x.year}
+                          </td>
+
+                          <td>
+                            ${escape(x.category)}
+                          </td>
+
+                          <td>
+                            ${money(x.amount)}
+                          </td>
+
+                          <td>
+                            ${money(x.spent)}
+                          </td>
+
+                          <td>
+                            ${money(x.remaining)}
+                          </td>
+
+                          <td>
+
+                            <button
+                              class="edit-btn"
+                              data-edit-budget="${x.id}"
+                            >
+                              Edit
+                            </button>
+
+
+                            <button
+                              class="danger"
+                              data-delete-budget="${x.id}"
+                            >
+                              Delete
+                            </button>
+
+                          </td>
+
+                        </tr>
+
+                      `).join('')
+                    : `
+                        <tr>
+                          <td colspan="6">
+                            <p class="empty">
+                              No budgets yet.
+                            </p>
+                          </td>
+                        </tr>
+                      `
+                }
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </section>
+
+      `;
+
+      $('#budget-form').onsubmit =
+        saveBudgetForm;
+
+      $('#budget-reset').onclick =
+        () => {
+
+          const form =
+            $('#budget-form');
+
+          form.reset();
+
+          form.elements.id.value = '';
+
+          form.elements.month.value =
+            now.getMonth() + 1;
+
+          form.elements.year.value =
+            now.getFullYear();
+
+          $('#budget-submit').textContent =
+            'Save budget';
+
+        };
+
+      document
+        .querySelectorAll('[data-edit-budget]')
+        .forEach(button => {
+
+          button.onclick = () =>
+            editBudget(
+              button.dataset.editBudget
+            );
+
+        });
+
+      document
+        .querySelectorAll('[data-delete-budget]')
+        .forEach(button => {
+
+          button.onclick = () =>
+            deleteBudget(
+              button.dataset.deleteBudget
+            );
+
+        }
+      );
+
+    }
+
+    async function saveBudgetForm(e) {
 
       e.preventDefault();
 
+
+      const form =
+        e.currentTarget;
+
+      const d =
+        formData(form);
+
+
+      const id =
+        d.id;
+
+
+      delete d.id;
+
+
       try {
 
-        await api.saveBudget(formData(e.currentTarget));
-        toast('Budget saved');
+        if (id) {
+
+          await api.updateBudget(
+            id,
+            d
+          );
+
+          toast('Budget updated');
+
+        } else {
+
+          await api.saveBudget(d);
+
+          toast('Budget saved');
+
+        }
+
+
+        form.reset();
+
+        state.page = 'budgets';
+
         renderBudgets();
 
       } catch (err) {
 
-        toast(err.message, true);
+        toast(
+          err.message,
+          true
+        );
 
       }
 
-    };
+    }
 
-  }
+    async function editBudget(id) {
+
+      try {
+
+        const items =
+          await api.budgets();
+
+
+        const budget =
+          items.find(
+            x =>
+              String(x.id) === String(id)
+          );
+
+
+        if (!budget) {
+
+          toast(
+            'Budget not found',
+            true
+          );
+
+          return;
+
+        }
+
+
+        const form =
+          $('#budget-form');
+
+
+        form.elements.id.value =
+          budget.id;
+
+
+        form.elements.category.value =
+          budget.category;
+
+
+        form.elements.amount.value =
+          budget.amount;
+
+
+        form.elements.month.value =
+          budget.month;
+
+
+        form.elements.year.value =
+          budget.year;
+
+
+        $('#budget-submit').textContent =
+          'Update budget';
+
+
+        form.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+
+
+      } catch (err) {
+
+        toast(
+          err.message,
+          true
+        );
+
+      }
+
+    }
+
+    async function deleteBudget(id) {
+
+      if (!confirm(
+        'Delete this budget?'
+      )) {
+
+        return;
+
+      }
+
+
+      try {
+
+        await api.deleteBudget(id);
+
+        toast(
+          'Budget deleted'
+        );
+
+        renderBudgets();
+
+      } catch (err) {
+
+        toast(
+          err.message,
+          true
+        );
+
+      }
+
+    }
 
 
   /* =========================================================
      RECURRING
      ========================================================= */
 
-  async function renderRecurring() {
+    async function renderRecurring() {
 
-    const items = await api.recurring();
-
-
-    $('#page').innerHTML = `
-
-      <section class="panel">
-        <form id="recurring-form" class="toolbar">
-
-          <label>
-            Description
-            <input name="description" required>
-          </label>
-
-          <label>
-            Amount
-            <input name="amount" type="number" min="0.01" step="0.01" required>
-          </label>
-
-          <label>
-            Category
-            <select name="category">${options(CATEGORIES)}</select>
-          </label>
-
-          <label>
-            Type
-            <select name="type">${options(TYPES, 'EXPENSE')}</select>
-          </label>
-
-          <label>
-            Frequency
-            <select name="frequency">
-              ${options(['WEEKLY', 'MONTHLY', 'YEARLY'], 'MONTHLY')}
-            </select>
-          </label>
-
-          <label>
-            First date
-            <input name="startDate" type="datetime-local" value="${ensureDate()}" required>
-          </label>
-
-          <button class="primary">Add recurring</button>
-
-        </form>
-      </section>
+      const items =
+        await api.recurring();
 
 
-      <section class="panel" style="margin-top:16px">
+      $('#page').innerHTML = `
 
-        <h3>Scheduled payments</h3>
+        <section class="panel">
 
-        ${
-          items.length
-            ? `
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Description</th>
-                      <th>Frequency</th>
-                      <th>Next due</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${items.map(x => `
+          <form
+            id="recurring-form"
+            class="toolbar"
+          >
+
+            <input
+              type="hidden"
+              name="id"
+            >
+
+
+            <label>
+              Description
+              <input
+                name="description"
+                required
+              >
+            </label>
+
+
+            <label>
+              Amount
+              <input
+                name="amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+              >
+            </label>
+
+
+            <label>
+              Category
+              <select name="category">
+                ${options(CATEGORIES)}
+              </select>
+            </label>
+
+
+            <label>
+              Type
+              <select name="type">
+                ${options(
+                  TYPES,
+                  'EXPENSE'
+                )}
+              </select>
+            </label>
+
+
+            <label>
+              Frequency
+
+              <select name="frequency">
+
+                ${options(
+                  [
+                    'WEEKLY',
+                    'MONTHLY',
+                    'YEARLY'
+                  ],
+                  'MONTHLY'
+                )}
+
+              </select>
+
+            </label>
+
+
+            <label>
+              First date
+
+              <input
+                name="startDate"
+                type="datetime-local"
+                value="${ensureDate()}"
+                required
+              >
+
+            </label>
+
+
+            <button
+              class="primary"
+              id="recurring-submit"
+            >
+              Add recurring
+            </button>
+
+
+            <button
+              type="button"
+              id="recurring-reset"
+            >
+              Clear
+            </button>
+
+          </form>
+
+        </section>
+
+
+        <section
+          class="panel"
+          style="margin-top:16px"
+        >
+
+          <div class="panel-header">
+
+            <div>
+
+              <h3>
+                Scheduled payments
+              </h3>
+
+              <p class="panel-subtitle">
+                Manage your recurring payments
+              </p>
+
+            </div>
+
+          </div>
+
+
+          ${
+            items.length
+              ? `
+
+                <div class="table-wrap">
+
+                  <table>
+
+                    <thead>
+
                       <tr>
-                        <td>${escape(x.description)}</td>
-                        <td>${escape(x.frequency)}</td>
-                        <td>${date(x.nextExecutionDate)}</td>
-                        <td>${money(x.amount)}</td>
-                        <td>${x.active ? 'Active' : 'Inactive'}</td>
+
+                        <th>Description</th>
+                        <th>Frequency</th>
+                        <th>Next due</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+
                       </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
-            `
-            : `<p class="empty">No recurring expenses.</p>`
-        }
 
-      </section>
-
-    `;
+                    </thead>
 
 
-    $('#recurring-form').onsubmit = async e => {
+                    <tbody>
+
+                      ${items.map(x => `
+
+                        <tr>
+
+                          <td>
+                            ${escape(
+                              x.description
+                            )}
+                          </td>
+
+
+                          <td>
+                            ${escape(
+                              x.frequency
+                            )}
+                          </td>
+
+
+                          <td>
+                            ${date(
+                              x.nextExecutionDate
+                            )}
+                          </td>
+
+
+                          <td>
+                            ${money(
+                              x.amount
+                            )}
+                          </td>
+
+
+                          <td>
+                            ${
+                              x.active
+                                ? 'Active'
+                                : 'Inactive'
+                            }
+                          </td>
+
+
+                          <td>
+
+                            <button
+                              class="edit-btn"
+                              data-edit-recurring="${x.id}"
+                            >
+                              Edit
+                            </button>
+
+
+                            <button
+                              class="danger"
+                              data-delete-recurring="${x.id}"
+                            >
+                              Delete
+                            </button>
+
+                          </td>
+
+                        </tr>
+
+                      `).join('')}
+
+                    </tbody>
+
+                  </table>
+
+                </div>
+
+              `
+              : `
+                <p class="empty">
+                  No recurring expenses.
+                </p>
+              `
+          }
+
+        </section>
+
+      `;
+
+      $('#recurring-form').onsubmit =
+        saveRecurringForm;
+
+
+      $('#recurring-reset').onclick =
+        () => {
+
+          const form =
+            $('#recurring-form');
+
+          form.reset();
+
+          form.elements.id.value =
+            '';
+
+          form.elements.type.value =
+            'EXPENSE';
+
+          form.elements.frequency.value =
+            'MONTHLY';
+
+          form.elements.startDate.value =
+            ensureDate();
+
+          $('#recurring-submit').textContent =
+            'Add recurring';
+
+        };
+
+
+      document
+        .querySelectorAll(
+          '[data-edit-recurring]'
+        )
+        .forEach(button => {
+
+          button.onclick = () =>
+            editRecurring(
+              button.dataset.editRecurring
+            );
+
+        });
+
+
+      document
+        .querySelectorAll(
+          '[data-delete-recurring]'
+        )
+        .forEach(button => {
+
+          button.onclick = () =>
+            deleteRecurring(
+              button.dataset.deleteRecurring
+            );
+
+        });
+
+    }
+
+    async function saveRecurringForm(e) {
 
       e.preventDefault();
 
+
+      const form =
+        e.currentTarget;
+
+      const d =
+        formData(form);
+
+
+      const id =
+        d.id;
+
+
+      delete d.id;
+
+
       try {
 
-        await api.createRecurring(formData(e.currentTarget));
-        toast('Recurring expense added');
+        if (id) {
+
+          await api.updateRecurring(
+            id,
+            d
+          );
+
+          toast(
+            'Recurring payment updated'
+          );
+
+        } else {
+
+          await api.createRecurring(d);
+
+          toast(
+            'Recurring payment added'
+          );
+
+        }
+
+
         renderRecurring();
 
       } catch (err) {
 
-        toast(err.message, true);
+        toast(
+          err.message,
+          true
+        );
 
       }
 
-    };
+    }
 
-  }
+    async function editRecurring(id) {
+
+      try {
+
+        const items =
+          await api.recurring();
+
+
+        const recurring =
+          items.find(
+            x =>
+              String(x.id) === String(id)
+          );
+
+
+        if (!recurring) {
+
+          toast(
+            'Recurring payment not found',
+            true
+          );
+
+          return;
+
+        }
+
+
+        const form =
+          $('#recurring-form');
+
+
+        form.elements.id.value =
+          recurring.id;
+
+
+        form.elements.description.value =
+          recurring.description;
+
+
+        form.elements.amount.value =
+          recurring.amount;
+
+
+        form.elements.category.value =
+          recurring.category;
+
+
+        form.elements.type.value =
+          recurring.type;
+
+
+        form.elements.frequency.value =
+          recurring.frequency;
+
+
+        form.elements.startDate.value =
+          ensureDate(
+            recurring.nextExecutionDate
+          );
+
+
+        $('#recurring-submit').textContent =
+          'Update recurring';
+
+
+        form.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+
+
+        form.elements.description.focus();
+
+
+      } catch (err) {
+
+        toast(
+          err.message,
+          true
+        );
+
+      }
+
+    }
+
+    async function deleteRecurring(id) {
+
+      if (!confirm(
+        'Delete this recurring payment?'
+      )) {
+
+        return;
+
+      }
+
+
+      try {
+
+        await api.deleteRecurring(id);
+
+        toast(
+          'Recurring payment deleted'
+        );
+
+        renderRecurring();
+
+      } catch (err) {
+
+        toast(
+          err.message,
+          true
+        );
+
+      }
+
+    }
 
 
   /* =========================================================

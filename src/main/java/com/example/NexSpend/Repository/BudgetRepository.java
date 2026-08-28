@@ -13,7 +13,18 @@ import java.util.Optional;
 public interface BudgetRepository extends JpaRepository<Budget, Long> {
     Optional<Budget> findByUserAndCategoryAndMonthAndYear(User user, Category category, Integer month, Integer year);
 
-    List<Budget> findByUserAndYear(User user, Integer year);
+
+    @Query("""
+       SELECT b
+       FROM Budget b
+       WHERE b.user = :user
+       AND b.year = :year
+       AND b.deleted = false
+       """)
+    List<Budget> findByUserAndYear(
+            @Param("user") User user,
+            @Param("year") Integer year
+    );
 
     @Query("SELECT b FROM Budget b WHERE b.user.id = :userId AND b.year = :year AND b.month = :month")
     List<Budget> findByUserIdAndMonthAndYear(@Param("userId") Long userId,

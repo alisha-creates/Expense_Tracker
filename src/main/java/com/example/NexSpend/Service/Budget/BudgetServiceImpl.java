@@ -11,6 +11,7 @@ import com.example.NexSpend.Mapper.BudgetMapper;
 import com.example.NexSpend.Repository.BudgetRepository;
 import com.example.NexSpend.Repository.ExpenseRepository;
 import com.example.NexSpend.Repository.UserRepository;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -33,7 +34,7 @@ public class BudgetServiceImpl implements BudgetService {
     private final BudgetMapper budgetMapper;
 
     @Override
-    public BudgetResponseDTO createOrUpdateBudget(BudgetRequestDTO dto, Authentication authentication) {
+    public BudgetResponseDTO createBudget(BudgetRequestDTO dto, Authentication authentication) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -52,6 +53,62 @@ public class BudgetServiceImpl implements BudgetService {
         BigDecimal spent = calculateSpent(saved);
         return budgetMapper.mapToDto(saved, spent);
     }
+
+    @Override
+    public BudgetResponseDTO updateBudget(
+            Long id,
+            BudgetRequestDTO dto,
+            Authentication authentication) {
+
+        String email = authentication.getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException("User not found")
+                );
+
+
+        Budget budget = budgetRepository
+                .findByIdAndDeletedFalse(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Budget not found")
+                );
+
+        if (!budget.getUser().getId().equals(user.getId())) {
+
+            throw new UnauthorizedActionException(
+                    "Unauthorized access"
+            );
+
+        }
+
+        budget.setCategory(
+                Category.valueOf(
+                        dto.getCategory().toUpperCase()
+                )
+        );
+
+        budget.setAmount(dto.getAmount());
+
+        budget.setMonth(dto.getMonth());
+
+        budget.setYear(dto.getYear());
+
+
+        Budget updated =
+                budgetRepository.save(budget);
+
+
+        BigDecimal spent =
+                calculateSpent(updated);
+
+
+        return budgetMapper.mapToDto(
+                updated,
+                spent
+        );
+    }
+
 
     @Override
     @Transactional(readOnly = true)
@@ -133,20 +190,43 @@ public class BudgetServiceImpl implements BudgetService {
         return alerts;
     }
 
-    @Transactional
-    public void deleteBudget(Long id, Authentication authentication) {
-        String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    @Override
+    public void deleteBudget(
+            Long id,
+            Authentication authentication) {
 
-        Budget budget = budgetRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Budget not found"));
+        String email =
+                authentication.getName();
+
+
+        User user =
+                userRepository.findByEmail(email)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "User not found"
+                                )
+                        );
+
+
+        Budget budget =
+                budgetRepository
+                        .findByIdAndDeletedFalse(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Budget not found"
+                                )
+                        );
 
         if (!budget.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedActionException("Unauthorized access");
+
+            throw new UnauthorizedActionException(
+                    "Unauthorized access"
+            );
+
         }
 
         budget.setDeleted(true);
+
         budgetRepository.save(budget);
     }
 }

@@ -49,11 +49,13 @@ public class RecurringExpense {
     @Column(nullable = false)
     private LocalDateTime nextExecutionDate;
 
+    @Builder.Default
     private boolean active = true;
 
     @CreationTimestamp
     private LocalDateTime createdAt;
 
+    @Builder.Default
     @Column(name = "deleted", nullable = false)
     private boolean deleted = false;
 }

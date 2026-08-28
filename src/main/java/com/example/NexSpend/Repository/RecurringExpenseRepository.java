@@ -12,7 +12,16 @@ import java.util.List;
 import java.util.Optional;
 
 public interface RecurringExpenseRepository extends JpaRepository<RecurringExpense, Long> {
-    List<RecurringExpense> findByUserAndActiveTrue(User user);
+    @Query("""
+       SELECT r
+       FROM RecurringExpense r
+       WHERE r.user = :user
+       AND r.active = true
+       AND r.deleted = false
+       """)
+    List<RecurringExpense> findByUserAndActiveTrue(
+            @Param("user") User user
+    );
 
     List<RecurringExpense> findByActiveTrueAndNextExecutionDateLessThanEqual(LocalDateTime date);
 

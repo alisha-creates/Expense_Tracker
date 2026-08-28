@@ -23,7 +23,7 @@ public class BudgetController {
             @Valid @RequestBody BudgetRequestDTO requestDTO,
             Authentication authentication) {
 
-        BudgetResponseDTO response = budgetService.createOrUpdateBudget(requestDTO, authentication);
+        BudgetResponseDTO response = budgetService.createBudget(requestDTO, authentication);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
@@ -39,5 +39,33 @@ public class BudgetController {
         return ResponseEntity.ok(budgets);
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<BudgetResponseDTO> updateBudget(
+            @PathVariable Long id,
+            @Valid @RequestBody BudgetRequestDTO requestDTO,
+            Authentication authentication) {
+
+        BudgetResponseDTO response =
+                budgetService.updateBudget(
+                        id,
+                        requestDTO,
+                        authentication
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteBudget(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        budgetService.deleteBudget(
+                id,
+                authentication
+        );
+
+        return ResponseEntity.noContent().build();
+    }
 
 }

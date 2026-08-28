@@ -93,4 +93,122 @@ public class RecurringExpenseServiceImpl implements RecurringExpenseService{
             recurringRepository.save(recurring);
         }
     }
+
+    @Override
+    public RecurringExpenseResponseDTO updateRecurring(
+            Long id,
+            RecurringExpenseRequestDTO dto,
+            Authentication authentication) {
+
+        String email =
+                authentication.getName();
+
+
+        User user =
+                userRepository.findByEmail(email)
+                        .orElseThrow(() ->
+                                new UserNotFoundException(
+                                        "User not found"
+                                )
+                        );
+
+
+        RecurringExpense recurring =
+                recurringRepository
+                        .findByIdAndDeletedFalse(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Recurring payment not found"
+                                )
+                        );
+
+        if (!recurring.getUser().getId().equals(user.getId())) {
+
+            throw new UserNotFoundException(
+                    "Unauthorized access"
+            );
+
+        }
+
+        recurring.setDescription(
+                dto.getDescription()
+        );
+
+        recurring.setAmount(
+                dto.getAmount()
+        );
+
+        recurring.setCategory(
+                Category.valueOf(
+                        dto.getCategory().toUpperCase()
+                )
+        );
+
+        recurring.setType(
+                ExpenseType.valueOf(
+                        dto.getType().toUpperCase()
+                )
+        );
+
+        recurring.setFrequency(
+                Frequency.valueOf(
+                        dto.getFrequency().toUpperCase()
+                )
+        );
+
+        recurring.setNextExecutionDate(
+                dto.getStartDate()
+        );
+
+
+        RecurringExpense updated =
+                recurringRepository.save(recurring);
+
+
+        return recurringExpenseMapper.mapToDto(
+                updated
+        );
+    }
+
+    @Override
+    public void deleteRecurring(
+            Long id,
+            Authentication authentication) {
+
+        String email =
+                authentication.getName();
+
+
+        User user =
+                userRepository.findByEmail(email)
+                        .orElseThrow(() ->
+                                new UserNotFoundException(
+                                        "User not found"
+                                )
+                        );
+
+
+        RecurringExpense recurring =
+                recurringRepository
+                        .findByIdAndDeletedFalse(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Recurring payment not found"
+                                )
+                        );
+
+        if (!recurring.getUser().getId().equals(user.getId())) {
+
+            throw new UserNotFoundException(
+                    "Unauthorized access"
+            );
+
+        }
+
+        recurring.setActive(false);
+
+        recurring.setDeleted(true);
+
+        recurringRepository.save(recurring);
+    }
 }
