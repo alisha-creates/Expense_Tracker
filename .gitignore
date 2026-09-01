@@ -1,6 +1,7 @@
 HELP.md
 .env
 target/
+*.class
 mysql_data/
 
 logs/
