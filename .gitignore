@@ -3,6 +3,9 @@ HELP.md
 target/
 mysql_data/
 
+logs/
+*.log
+
 # Maven
 .mvn/wrapper/maven-wrapper.jar
 
