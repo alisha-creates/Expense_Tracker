@@ -13,7 +13,6 @@ It helps users securely manage income and expenses, monitor their spending habit
 * User registration and login
 * JWT-based authentication
 * Access token and refresh token support
-* Role-based access control
 * Secure password hashing
 * Email account activation
 * Password change functionality
@@ -28,7 +27,6 @@ It helps users securely manage income and expenses, monitor their spending habit
 * Add income and expenses
 * Edit existing transactions
 * Delete transactions
-* Soft-delete support
 * Transaction categorization
 * Income/expense type classification
 * Transaction date tracking
