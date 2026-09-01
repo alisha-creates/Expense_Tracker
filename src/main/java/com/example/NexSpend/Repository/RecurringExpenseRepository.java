@@ -13,15 +13,14 @@ import java.util.Optional;
 
 public interface RecurringExpenseRepository extends JpaRepository<RecurringExpense, Long> {
     @Query("""
-       SELECT r
-       FROM RecurringExpense r
-       WHERE r.user = :user
-       AND r.active = true
-       AND r.deleted = false
-       """)
-    List<RecurringExpense> findByUserAndActiveTrue(
-            @Param("user") User user
-    );
+        SELECT r
+        FROM RecurringExpense r
+        WHERE r.user = :user
+        AND r.active = true
+        AND r.deleted = false
+        ORDER BY r.nextExecutionDate ASC
+        """)
+    List<RecurringExpense> findByUserAndActiveTrue(@Param("user") User user);
 
     List<RecurringExpense> findByActiveTrueAndNextExecutionDateLessThanEqual(LocalDateTime date);
 
@@ -33,7 +32,7 @@ public interface RecurringExpenseRepository extends JpaRepository<RecurringExpen
     );
 
     @Modifying
-    @Query("DELETE FROM RecurringExpense r WHERE r.user.id = :userId")
+    @Query(value = "DELETE FROM recurring_expenses WHERE user_id = :userId", nativeQuery = true)
     void permanentlyDeleteByUserId(@Param("userId") Long userId);
 
     Optional<RecurringExpense> findByIdAndDeletedFalse(Long id);

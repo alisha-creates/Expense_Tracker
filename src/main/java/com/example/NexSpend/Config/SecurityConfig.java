@@ -5,6 +5,7 @@ import com.example.NexSpend.Security.LoggingFilter;
 import com.example.NexSpend.Security.RateLimitFilter;
 import com.example.NexSpend.Service.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,10 +21,12 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
@@ -31,82 +34,59 @@ import java.util.List;
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
-
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final LoggingFilter loggingFilter;
     private final RateLimitFilter rateLimitFilter;
     private final CustomUserDetailsService customUserDetailsService;
 
+    @Value("${APP_FRONTEND_URL:}")
+    private String frontendUrl;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
         http
                 .csrf(csrf -> csrf.disable())
-
                 .cors(Customizer.withDefaults())
-
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(Customizer.withDefaults())
+                        .referrerPolicy(referrer -> referrer
+                                .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)
+                        )
+                )
                 .authorizeHttpRequests(auth -> auth
-
-                        // Public frontend files
                         .requestMatchers(
                                 "/",
                                 "/index.html",
                                 "/app.css",
                                 "/app.js",
                                 "/favicon.ico",
-                                "/favicon.svg"
-                        )
-                        .permitAll()
-
-                        // Authentication APIs
-                        .requestMatchers("/api/auth/**")
-                        .permitAll()
-
-                        // Notifications are initiated by the signed-in user.
-                        .requestMatchers("/api/notification/**")
-                        .authenticated()
-
-                        // Account APIs
-                        .requestMatchers("/api/users/**")
-                        .authenticated()
-
-                        // Authenticated APIs
+                                "/favicon.svg",
+                                "/css/**",
+                                "/js/**",
+                                "/assets/**"
+                        ).permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/notification/**").authenticated()
+                        .requestMatchers("/api/users/**").authenticated()
                         .requestMatchers(
                                 "/api/report/**",
                                 "/api/dashboard/**",
                                 "/api/expenses/**",
                                 "/api/budgets/**",
                                 "/api/recurring/**"
-                        )
-                        .authenticated()
-
-                        // Everything else requires authentication
-                        .anyRequest()
-                        .authenticated()
+                        ).authenticated()
+                        .anyRequest().authenticated()
                 )
-
                 .authenticationProvider(authenticationProvider());
 
-        // Security filters
         http
-                .addFilterBefore(
-                        rateLimitFilter,
-                        UsernamePasswordAuthenticationFilter.class
-                )
-
-                .addFilterBefore(
-                        jwtAuthenticationFilter,
-                        rateLimitFilter.getClass()
-                )
-
-                .addFilterAfter(
-                        loggingFilter,
-                        jwtAuthenticationFilter.getClass()
-                );
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthenticationFilter, rateLimitFilter.getClass())
+                .addFilterAfter(loggingFilter, jwtAuthenticationFilter.getClass());
 
         return http.build();
     }
@@ -118,12 +98,9 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationProvider authenticationProvider() {
-
         DaoAuthenticationProvider provider =
                 new DaoAuthenticationProvider(customUserDetailsService);
-
         provider.setPasswordEncoder(passwordEncoder());
-
         return provider;
     }
 
@@ -131,51 +108,38 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(
             AuthenticationConfiguration config
     ) throws Exception {
-
         return config.getAuthenticationManager();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOriginPatterns(List.of(
+        List<String> allowedOrigins = new ArrayList<>(List.of(
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "https://your-frontend-domain.com"
+                "http://127.0.0.1:5173"
         ));
 
+        if (frontendUrl != null && !frontendUrl.isBlank()) {
+            allowedOrigins.add(frontendUrl.trim());
+        }
+
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of(
-                "GET",
-                "POST",
-                "PUT",
-                "DELETE",
-                "PATCH",
-                "OPTIONS"
+                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
         ));
-
         config.setAllowedHeaders(List.of(
-                "Authorization",
-                "Content-Type",
-                "X-Requested-With"
+                "Authorization", "Content-Type", "X-Requested-With"
         ));
-
-        config.setExposedHeaders(List.of(
-                "Authorization"
-        ));
-
+        config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(true);
-
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();
-
         source.registerCorsConfiguration("/**", config);
-
         return source;
     }
 }

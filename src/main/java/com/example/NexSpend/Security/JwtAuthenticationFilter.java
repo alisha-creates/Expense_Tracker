@@ -86,7 +86,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter{
 
         } catch (JwtException | IllegalArgumentException e) {
 
-            log.debug("Rejected JWT: {}", e.getMessage());
+            log.debug("Rejected JWT authentication attempt for {}", request.getRequestURI());
 
             SecurityContextHolder.clearContext();
 

@@ -8,10 +8,7 @@ import com.example.NexSpend.DTO.UserDTO.UserRequestDTO;
 import com.example.NexSpend.DTO.UserDTO.UserResponseDTO;
 import com.example.NexSpend.Entity.RefreshToken;
 import com.example.NexSpend.Entity.User;
-import com.example.NexSpend.Exception.EmailAlreadyExistsException;
-import com.example.NexSpend.Exception.InvalidTokenException;
-import com.example.NexSpend.Exception.UnauthorizedActionException;
-import com.example.NexSpend.Exception.UserNotFoundException;
+import com.example.NexSpend.Exception.*;
 import com.example.NexSpend.Mapper.UserMapper;
 import com.example.NexSpend.Repository.UserRepository;
 import com.example.NexSpend.Repository.ExpenseRepository;
@@ -84,23 +81,8 @@ public class UserServiceImpl implements UserService {
                 .activationTokenExpiry(activationExpiry)
                 .build();
 
-        System.out.println(
-                "TOKEN BEFORE SAVE = " +
-                        user.getActivationToken()
-        );
-
-        System.out.println(
-                "TOKEN EXPIRY = " +
-                        user.getActivationTokenExpiry()
-        );
-
         User savedUser =
                 userRepository.save(user);
-
-        System.out.println(
-                "TOKEN AFTER SAVE = " +
-                        savedUser.getActivationToken()
-        );
 
         emailService.sendActivationEmail(
                 savedUser.getEmail(),
@@ -127,8 +109,8 @@ public class UserServiceImpl implements UserService {
                 );
 
         if (!user.isEnabled()) {
-            throw new RuntimeException(
-                    "Please verify your email first"
+            throw new AccountNotActivatedException(
+                    "Please verify your email before signing in"
             );
         }
 
@@ -161,18 +143,12 @@ public class UserServiceImpl implements UserService {
                         )
                 );
 
-        /*
-         * Check whether the account has already been activated.
-         */
         if (user.isEnabled()) {
             throw new InvalidTokenException(
                     "Account has already been activated"
             );
         }
 
-        /*
-         * Check whether the activation token has expired.
-         */
         if (user.getActivationTokenExpiry() == null ||
                 LocalDateTime.now()
                         .isAfter(user.getActivationTokenExpiry())) {
@@ -182,19 +158,10 @@ public class UserServiceImpl implements UserService {
             );
         }
 
-        /*
-         * Activate the account.
-         */
         user.setEnabled(true);
 
-        /*
-         * Token can no longer be used.
-         */
         user.setActivationToken(null);
 
-        /*
-         * Remove expiry as well.
-         */
         user.setActivationTokenExpiry(null);
 
         userRepository.save(user);
@@ -243,19 +210,26 @@ public class UserServiceImpl implements UserService {
                         new UserNotFoundException("User not found")
                 );
 
-        user.setName(dto.getName());
+        boolean emailChanged = !user.getEmail().equalsIgnoreCase(dto.getEmail());
+        boolean passwordChanged = dto.getPassword() != null && !dto.getPassword().isBlank();
 
+        if (emailChanged && userRepository.existsByEmail(dto.getEmail())) {
+            throw new EmailAlreadyExistsException("Email already exists");
+        }
+
+        user.setName(dto.getName());
         user.setEmail(dto.getEmail());
 
-        if (dto.getPassword() != null &&
-                !dto.getPassword().isBlank()) {
-
-            user.setPassword(
-                    passwordEncoder.encode(dto.getPassword())
-            );
+        if (passwordChanged) {
+            user.setPassword(passwordEncoder.encode(dto.getPassword()));
         }
 
         User updatedUser = userRepository.save(user);
+
+
+        if (emailChanged || passwordChanged) {
+            refreshTokenRepository.deleteByUser(user);
+        }
 
         return userMapper.mapToDto(updatedUser);
     }
@@ -321,19 +295,17 @@ public class UserServiceImpl implements UserService {
         currentUser.setPassword(passwordEncoder.encode(dto.getNewPassword()));
 
         userRepository.save(currentUser);
+        refreshTokenRepository.deleteByUser(currentUser);
 
-        // Notify the user by email — don't let a mail failure
-        // undo an otherwise successful password change.
         try {
             emailService.sendPasswordChangedEmail(
                     currentUser.getEmail(),
                     currentUser.getName()
             );
         } catch (Exception e) {
-            System.err.println(
-                    "Password changed but confirmation email failed to send: "
-                            + e.getMessage()
-            );
+            org.slf4j.LoggerFactory.getLogger(UserServiceImpl.class)
+                    .warn("Password changed but confirmation email could not be sent for user {}",
+                            currentUser.getId(), e);
         }
     }
 

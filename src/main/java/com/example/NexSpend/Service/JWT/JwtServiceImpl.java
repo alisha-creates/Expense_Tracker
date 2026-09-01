@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.security.Key;
 import java.util.Date;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -24,12 +25,10 @@ public class JwtServiceImpl implements JwtService {
     @Value("${jwt.expiration}")
     private Long jwtExpirationMs;
 
-    // Generate Signing Key
     private Key getSignKey() {
-        return Keys.hmacShaKeyFor(secretKey.getBytes());
+        return Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
     }
 
-    // Generate JWT Token
     @Override
     public String generateToken(UserDetails userDetails) {
 

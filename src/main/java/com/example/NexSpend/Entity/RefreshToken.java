@@ -25,4 +25,12 @@ public class RefreshToken {
     private String token;
 
     private Instant expiryDate;
+
+    @Transient
+    @Setter(AccessLevel.NONE)
+    private String rawToken;
+
+    public void setRawToken(String rawToken) {
+        this.rawToken = rawToken;
+    }
 }

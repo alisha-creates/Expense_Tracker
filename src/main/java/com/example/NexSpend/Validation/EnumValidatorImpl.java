@@ -14,7 +14,7 @@ public class EnumValidatorImpl implements ConstraintValidator<EnumValidator, Str
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
         if (value == null) {
-            return true; // Let @NotNull handle null values
+            return true;
         }
 
         for (Enum<?> enumValue : enumValues) {

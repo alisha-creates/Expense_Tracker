@@ -3,6 +3,8 @@ package com.example.NexSpend.Service.Dashboard;
 import com.example.NexSpend.DTO.DashboardResponseDTO;
 import com.example.NexSpend.DTO.ExpenseDTO.ExpenseResponseDTO;
 import com.example.NexSpend.DTO.BudgetDTO.BudgetResponseDTO;
+import com.example.NexSpend.DTO.TrendDTO.TrendPointDTO;
+import com.example.NexSpend.DTO.TrendDTO.TrendResponseDTO;
 import com.example.NexSpend.DTO.UpcomingExpenseDTO;
 import com.example.NexSpend.Entity.Category;
 import com.example.NexSpend.Entity.Expense;
@@ -24,6 +26,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -181,5 +184,47 @@ public class DashboardServiceImpl implements DashboardService {
                 })
                 .sorted((a, b) -> a.getNextDueDate().compareTo(b.getNextDueDate()))
                 .toList();
+    }
+
+    @Override
+    public TrendResponseDTO getWeeklyTrend(int weekOffset, Authentication authentication) {
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        // weekOffset 0 = last 7 days ending today; -1 = the 7 days before that; etc.
+        LocalDate endDate = LocalDate.now().plusWeeks(weekOffset);
+        LocalDate startDate = endDate.minusDays(6);
+
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+
+        Map<LocalDate, BigDecimal> byDate = new HashMap<>();
+        for (Object[] row : expenseRepository.expenseTrendBetween(user.getId(), startDateTime, endDateTime)) {
+            byDate.put(LocalDate.parse(row[0].toString()), (BigDecimal) row[1]);
+        }
+
+        List<TrendPointDTO> points = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            LocalDate day = startDate.plusDays(i);
+            points.add(TrendPointDTO.builder()
+                    .date(day)
+                    .label(day.getDayOfWeek().name().substring(0, 3))
+                    .amount(byDate.getOrDefault(day, BigDecimal.ZERO))
+                    .build());
+        }
+
+        BigDecimal total = points.stream()
+                .map(TrendPointDTO::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM d");
+
+        return TrendResponseDTO.builder()
+                .weekOffset(weekOffset)
+                .rangeLabel(startDate.format(fmt) + " - " + endDate.format(fmt))
+                .points(points)
+                .total(total)
+                .isCurrentWeek(weekOffset == 0)
+                .build();
     }
 }

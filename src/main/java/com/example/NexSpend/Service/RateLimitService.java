@@ -10,26 +10,49 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class RateLimitService {
-    private final Map<String, Bucket> buckets =
-            new ConcurrentHashMap<>();
+    private static final int MAX_BUCKETS = 10_000;
+    private static final long ENTRY_TTL_MILLIS = Duration.ofMinutes(10).toMillis();
+
+    private final Map<String, BucketEntry> buckets = new ConcurrentHashMap<>();
 
     public Bucket resolveBucket(String ip) {
+        long now = System.currentTimeMillis();
+        cleanupExpired(now);
 
-        return buckets.computeIfAbsent(
-                ip,
-                this::newBucket
-        );
+        BucketEntry entry = buckets.computeIfAbsent(ip, key -> new BucketEntry(newBucket(), now));
+        entry.lastAccess = now;
+
+        // Keep memory bounded even if an attacker sends requests using many source IPs.
+        if (buckets.size() > MAX_BUCKETS) {
+            cleanupExpired(now);
+            if (buckets.size() > MAX_BUCKETS) {
+                String keyToRemove = buckets.keySet().stream().findFirst().orElse(null);
+                if (keyToRemove != null) {
+                    buckets.remove(keyToRemove);
+                }
+            }
+        }
+
+        return entry.bucket;
     }
 
-    private Bucket newBucket(String ip) {
+    private void cleanupExpired(long now) {
+        buckets.entrySet().removeIf(entry ->
+                now - entry.getValue().lastAccess > ENTRY_TTL_MILLIS);
+    }
 
-        Bandwidth limit =
-                Bandwidth.simple(
-                        20,
-                        Duration.ofMinutes(1));
+    private Bucket newBucket() {
+        Bandwidth limit = Bandwidth.simple(20, Duration.ofMinutes(1));
+        return Bucket.builder().addLimit(limit).build();
+    }
 
-        return Bucket.builder()
-                .addLimit(limit)
-                .build();
+    private static final class BucketEntry {
+        private final Bucket bucket;
+        private volatile long lastAccess;
+
+        private BucketEntry(Bucket bucket, long lastAccess) {
+            this.bucket = bucket;
+            this.lastAccess = lastAccess;
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.example.NexSpend.DTO.RefreshTokenDTO;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
 @Data
@@ -7,5 +8,6 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class RefreshTokenRequest {
+    @NotBlank(message = "Refresh token is required")
     private String refreshToken;
 }

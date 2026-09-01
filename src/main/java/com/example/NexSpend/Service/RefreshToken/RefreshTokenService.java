@@ -12,4 +12,8 @@ public interface RefreshTokenService {
     Optional<RefreshToken> findByToken(String token);
 
     void deleteByUser(Long userId);
+
+    void deleteByEmail(String email);
+
+    void deleteByToken(String rawToken);
 }

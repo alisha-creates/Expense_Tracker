@@ -168,6 +168,10 @@
       api.request('/api/dashboard'),
 
 
+    trend: weekOffset =>
+      api.request(`/api/dashboard/trend?weekOffset=${weekOffset}`),
+
+
     expenses: q =>
       api.request(
         `/api/expenses?${new URLSearchParams(q)}`
@@ -898,481 +902,983 @@
 
   }
 
+    /* =========================================================
+       OVERVIEW / DASHBOARD
+       ========================================================= */
 
-  /* =========================================================
-     OVERVIEW / DASHBOARD
-     ========================================================= */
+    async function renderDashboard() {
 
-  async function renderDashboard() {
+      const [d, trend] = await Promise.all([
+        api.dashboard(),
+        api.trend(0)
+      ]);
 
-    const d =
-      await api.dashboard();
+      const balance =
+        Number(d.balance || 0);
 
+      const income =
+        Number(d.totalIncome || 0);
 
-    const balance =
-      Number(d.balance || 0);
+      const expenses =
+        Number(d.totalExpense || 0);
 
-    const income =
-      Number(d.totalIncome || 0);
+      const monthly =
+        Number(d.monthlyExpense || 0);
 
-    const expenses =
-      Number(d.totalExpense || 0);
+      const savings =
+        Number(d.savingsRate || 0);
 
-    const monthly =
-      Number(d.monthlyExpense || 0);
-
-    const savings =
-      Number(d.savingsRate || 0);
-
-    const utilization =
-      Number(
-        d.budgetUtilizationPercentage ||
-        d.budgetUtilization ||
-        0
-      );
-
-
-    const trends =
-      d.expenseTrends ||
-      d.monthlyExpenseTrend ||
-      d.expenseTrend ||
-      {};
-
-
-    const trendEntries =
-      Object.entries(trends)
-        .filter(
-          ([, value]) =>
-            Number(value || 0) >= 0
+      const utilization =
+        Number(
+          d.budgetUtilizationPercentage ||
+          d.budgetUtilization ||
+          0
         );
 
 
-    const maxTrend =
-      Math.max(
-        ...trendEntries.map(
-          ([, value]) =>
-            Number(value || 0)
-        ),
-        1
-      );
+      /* =========================================================
+         TREND DATA
+         ========================================================= */
+
+      const trendPoints =
+        Array.isArray(trend?.points)
+          ? trend.points
+          : [];
+
+      const maxTrend =
+        Math.max(
+          ...trendPoints.map(
+            p => Number(p.amount || 0)
+          ),
+          1
+        );
 
 
-    let categoryData = null;
+      function trendChartHtml(t) {
 
+        const points =
+          Array.isArray(t?.points)
+            ? t.points
+            : [];
 
-    const possibleCategoryData = [
-      d.expenseByCategory,
-      d.categoryExpenses,
-      d.categoryWiseExpenses,
-      d.categoryWiseExpense,
-      d.expensesByCategory,
-      d.expensesByCategories,
-      d.categorySpending
-    ];
-
-
-    for (const value of possibleCategoryData) {
-
-      if (
-        value &&
-        typeof value === 'object' &&
-        !Array.isArray(value) &&
-        Object.keys(value).length > 0
-      ) {
-
-        categoryData = value;
-
-        break;
-
-      }
-
-    }
-
-
-    if (!categoryData) {
-
-      try {
-
-        const transactionResult =
-          await api.expenses({
-            page: 0,
-            size: 1000,
-            sort: 'date,desc'
-          });
-
-
-        const transactions =
-          transactionResult?.content ||
-          transactionResult ||
-          [];
-
-
-        categoryData = {};
-
-
-        transactions
-          .filter(
-            transaction =>
-              String(
-                transaction.type || ''
-              ).toUpperCase() === 'EXPENSE'
-          )
-          .forEach(
-            transaction => {
-
-              const category =
-                String(
-                  transaction.category ||
-                  'OTHER'
-                )
-                .trim()
-                .toUpperCase();
-
-
-              const amount =
-                Number(
-                  transaction.amount || 0
-                );
-
-
-              if (amount > 0) {
-
-                categoryData[category] =
-                  (
-                    categoryData[category] || 0
-                  ) + amount;
-
-              }
-
-            }
+        const max =
+          Math.max(
+            ...points.map(
+              p => Number(p.amount || 0)
+            ),
+            1
           );
 
-      } catch (error) {
+        return `
+          <div class="chart">
 
-        console.error(
-          'Unable to calculate category spending:',
-          error
-        );
+            ${
+              points.length
+                ? points.map(p => {
 
-        categoryData = {};
+                    const amount =
+                      Number(p.amount || 0);
+
+                    const height =
+                      Math.max(
+                        (amount / max) * 100,
+                        3
+                      );
+
+                    return `
+                      <div class="chart-column">
+
+                        <span class="chart-value">
+                          ${money(amount)}
+                        </span>
+
+                        <div
+                          class="chart-bar"
+                          style="height:${height}%;"
+                          title="${money(amount)}"
+                        ></div>
+
+                        <span class="chart-label">
+                          ${escape(p.label)}
+                        </span>
+
+                      </div>
+                    `;
+
+                  }).join('')
+
+                : `
+                  <p class="empty">
+                    No expense trend data available yet.
+                  </p>
+                `
+            }
+
+          </div>
+
+          ${
+            points.length
+              ? `
+                <div class="analytics-legend">
+                  <span>
+                    <i class="legend-dot"></i>
+                    Expenses
+                  </span>
+
+                  <span>
+                    ${money(t.total || 0)} this week
+                  </span>
+                </div>
+              `
+              : ''
+          }
+        `;
+      }
+
+
+      /* =========================================================
+         CATEGORY DATA
+         ========================================================= */
+
+      let categoryData = null;
+
+      const possibleCategoryData = [
+        d.expenseByCategory,
+        d.categoryExpenses,
+        d.categoryWiseExpenses,
+        d.categoryWiseExpense,
+        d.expensesByCategory,
+        d.expensesByCategories,
+        d.categorySpending
+      ];
+
+
+      for (const value of possibleCategoryData) {
+
+        if (
+          value &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          Object.keys(value).length > 0
+        ) {
+
+          categoryData = value;
+
+          break;
+        }
+      }
+
+
+      /* =========================================================
+         FALLBACK: CALCULATE CATEGORY DATA FROM EXPENSES
+         ========================================================= */
+
+      if (!categoryData) {
+
+        try {
+
+          const transactionResult =
+            await api.expenses({
+              page: 0,
+              size: 1000,
+              sort: 'date,desc'
+            });
+
+
+          const expenseTransactions =
+            transactionResult?.content ||
+            transactionResult ||
+            [];
+
+
+          categoryData = {};
+
+
+          expenseTransactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.type || ''
+                ).toUpperCase() === 'EXPENSE'
+            )
+            .forEach(
+              transaction => {
+
+                const category =
+                  String(
+                    transaction.category ||
+                    'OTHER'
+                  )
+                  .trim()
+                  .toUpperCase();
+
+
+                const amount =
+                  Number(
+                    transaction.amount || 0
+                  );
+
+
+                if (amount > 0) {
+
+                  categoryData[category] =
+                    (
+                      categoryData[category] || 0
+                    ) + amount;
+
+                }
+
+              }
+            );
+
+        } catch (error) {
+
+          console.error(
+            'Unable to calculate category spending:',
+            error
+          );
+
+          categoryData = {};
+
+        }
 
       }
 
-    }
+
+      /* =========================================================
+         CATEGORY SUMMARY
+         ========================================================= */
+
+      const categoryEntries =
+        Object.entries(categoryData || {})
+          .map(
+            ([category, value]) => [
+              String(category).toUpperCase(),
+              Number(value || 0)
+            ]
+          )
+          .filter(
+            ([, value]) =>
+              value > 0
+          )
+          .sort(
+            (a, b) =>
+              b[1] - a[1]
+          );
 
 
-    const categoryEntries =
-      Object.entries(categoryData || {})
-        .map(
-          ([category, value]) => [
-            String(category).toUpperCase(),
-            Number(value || 0)
-          ]
-        )
-        .filter(
-          ([, value]) =>
-            value > 0
-        )
-        .sort(
-          (a, b) =>
-            b[1] - a[1]
+      const totalCategoryExpense =
+        categoryEntries.reduce(
+          (sum, [, value]) =>
+            sum + value,
+          0
         );
 
 
-    const totalCategoryExpense =
-      categoryEntries.reduce(
-        (sum, [, value]) =>
-          sum + value,
-        0
-      );
+      const calculatedTopCategory =
+        categoryEntries.length
+          ? categoryEntries[0][0]
+          : null;
 
 
-    const calculatedTopCategory =
-      categoryEntries.length
-        ? categoryEntries[0][0]
-        : null;
+      const topCategory =
+        d.topCategory ||
+        d.mostSpentCategory ||
+        d.highestExpenseCategory ||
+        calculatedTopCategory ||
+        'N/A';
 
 
-    const topCategory =
-      d.topCategory ||
-      d.mostSpentCategory ||
-      d.highestExpenseCategory ||
-      calculatedTopCategory ||
-      'N/A';
+      /* =========================================================
+         BUDGET DATA
+         ========================================================= */
+
+      const budgetSpent =
+        Number(
+          d.budgetSpent ||
+          d.totalBudgetSpent ||
+          0
+        );
 
 
-    const budgetSpent =
-      Number(
-        d.budgetSpent ||
-        d.totalBudgetSpent ||
-        0
-      );
+      const budgetAmount =
+        Number(
+          d.totalBudget ||
+          d.budgetAmount ||
+          0
+        );
 
 
-    const budgetAmount =
-      Number(
-        d.totalBudget ||
-        d.budgetAmount ||
-        0
-      );
+      /* =========================================================
+         RECENT TRANSACTIONS
+         ========================================================= */
+
+      const recentTransactions =
+        d.last10Transactions ||
+        d.recentTransactions ||
+        d.transactions ||
+        [];
 
 
-    const recentTransactions =
-      d.last10Transactions ||
-      d.recentTransactions ||
-      d.transactions ||
-      [];
+      /* =========================================================
+         RENDER DASHBOARD
+         ========================================================= */
 
+      $('#page').innerHTML = `
 
-    $('#page').innerHTML = `
+        <div class="grid stats">
 
-      <div class="grid stats">
+          <article class="panel stat">
 
-        <article class="panel stat">
-          <p>Total balance</p>
-          <strong>${money(balance)}</strong>
-          <div class="stat-sub">Available balance</div>
-        </article>
+            <p>Total balance</p>
 
-        <article class="panel stat">
-          <p>Total income</p>
-          <strong class="amount-income">${money(income)}</strong>
-          <div class="stat-sub">Money received</div>
-        </article>
+            <strong>
+              ${money(balance)}
+            </strong>
 
-        <article class="panel stat">
-          <p>Total expenses</p>
-          <strong class="amount-expense">${money(expenses)}</strong>
-          <div class="stat-sub">Overall spending</div>
-        </article>
-
-        <article class="panel stat">
-          <p>Monthly spending</p>
-          <strong>${money(monthly)}</strong>
-          <div class="stat-sub">${savings.toFixed(1)}% savings rate</div>
-        </article>
-
-      </div>
-
-
-      <div class="grid dashboard-main">
-
-        <article class="panel analytics-panel">
-
-          <div class="panel-header">
-            <div>
-              <h3>Monthly expense trend</h3>
-              <p class="panel-subtitle">Your spending activity over time</p>
+            <div class="stat-sub">
+              Available balance
             </div>
-            <span class="auth-badge">MONTHLY</span>
-          </div>
 
-          ${
-            trendEntries.length
-              ? `
-                <div class="chart">
-                  ${trendEntries.map(([label, value]) => {
-                    const amount = Number(value || 0);
-                    const height = Math.max((amount / maxTrend) * 100, 3);
-                    return `
-                      <div class="chart-column">
-                        <span class="chart-value">${money(amount)}</span>
-                        <div class="chart-bar" style="height:${height}%;" title="${money(amount)}"></div>
-                        <span class="chart-label">${escape(label)}</span>
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-                <div class="analytics-legend">
-                  <span><i class="legend-dot"></i>Expenses</span>
-                  <span>${money(monthly)} this month</span>
-                </div>
-              `
-              : `<p class="empty">No expense trend data available yet.</p>`
-          }
-
-        </article>
+          </article>
 
 
-        <article class="panel">
+          <article class="panel stat">
 
-          <div class="panel-header">
-            <div>
-              <h3>Budget performance</h3>
-              <p class="panel-subtitle">Current budget utilisation</p>
+            <p>Total income</p>
+
+            <strong class="amount-income">
+              ${money(income)}
+            </strong>
+
+            <div class="stat-sub">
+              Money received
             </div>
-          </div>
 
-          <div class="budget-summary">
+          </article>
 
-            <div class="budget-total">
+
+          <article class="panel stat">
+
+            <p>Total expenses</p>
+
+            <strong class="amount-expense">
+              ${money(expenses)}
+            </strong>
+
+            <div class="stat-sub">
+              Overall spending
+            </div>
+
+          </article>
+
+
+          <article class="panel stat">
+
+            <p>Monthly spending</p>
+
+            <strong>
+              ${money(monthly)}
+            </strong>
+
+            <div class="stat-sub">
+              ${savings.toFixed(1)}% savings rate
+            </div>
+
+          </article>
+
+        </div>
+
+
+        <div class="grid dashboard-main">
+
+          <!-- =========================
+               EXPENSE TREND
+               ========================= -->
+
+          <article class="panel analytics-panel">
+
+            <div class="panel-header">
+
               <div>
-                <small>UTILISATION</small>
-                <strong>${utilization.toFixed(1)}%</strong>
+
+                <h3>
+                  Monthly expense trend
+                </h3>
+
+                <p class="panel-subtitle">
+                  Your spending activity over time
+                </p>
+
               </div>
-              <span>${utilization > 100 ? 'Over budget' : 'On track'}</span>
+
+
+              <div class="trend-nav">
+
+                <button
+                  type="button"
+                  class="trend-nav-btn"
+                  id="trend-prev"
+                  title="Previous week"
+                >
+                  ‹
+                </button>
+
+
+                <span
+                  class="auth-badge"
+                  id="trend-range-label"
+                >
+                  ${escape(trend?.rangeLabel || '')}
+                </span>
+
+
+                <button
+                  type="button"
+                  class="trend-nav-btn"
+                  id="trend-next"
+                  title="Next week"
+                  ${trend?.isCurrentWeek ? 'disabled' : ''}
+                >
+                  ›
+                </button>
+
+              </div>
+
             </div>
 
-            <div class="budget-progress">
-              <span style="width:${Math.min(utilization, 100)}%;"></span>
+
+            <div id="trend-chart-body">
+
+              ${trendChartHtml(trend)}
+
             </div>
 
-            <div class="budget-meta">
-              <span>${budgetSpent ? money(budgetSpent) : 'Current spending'}</span>
-              <span>${budgetAmount ? money(budgetAmount) : 'Budget'}</span>
+          </article>
+
+
+          <!-- =========================
+               BUDGET PERFORMANCE
+               ========================= -->
+
+          <article class="panel">
+
+            <div class="panel-header">
+
+              <div>
+
+                <h3>
+                  Budget performance
+                </h3>
+
+                <p class="panel-subtitle">
+                  Current budget utilisation
+                </p>
+
+              </div>
+
             </div>
+
+
+            <div class="budget-summary">
+
+
+              <div class="budget-total">
+
+                <div>
+
+                  <small>
+                    UTILISATION
+                  </small>
+
+                  <strong>
+                    ${utilization.toFixed(1)}%
+                  </strong>
+
+                </div>
+
+
+                <span>
+                  ${
+                    utilization > 100
+                      ? 'Over budget'
+                      : 'On track'
+                  }
+                </span>
+
+              </div>
+
+
+              <div class="budget-progress">
+
+                <span
+                  style="width:${Math.min(
+                    utilization,
+                    100
+                  )}%;"
+                ></span>
+
+              </div>
+
+
+              <div class="budget-meta">
+
+                <span>
+                  ${
+                    budgetSpent
+                      ? money(budgetSpent)
+                      : 'Current spending'
+                  }
+                </span>
+
+
+                <span>
+                  ${
+                    budgetAmount
+                      ? money(budgetAmount)
+                      : 'Budget'
+                  }
+                </span>
+
+              </div>
+
+
+              <div class="metric-list">
+
+
+                <div class="metric-row">
+
+                  <span>
+                    Monthly expense
+                  </span>
+
+                  <b>
+                    ${money(monthly)}
+                  </b>
+
+                </div>
+
+
+                <div class="metric-row">
+
+                  <span>
+                    Savings rate
+                  </span>
+
+                  <b>
+                    ${savings.toFixed(1)}%
+                  </b>
+
+                </div>
+
+
+                <div class="metric-row">
+
+                  <span>
+                    Top category
+                  </span>
+
+                  <b>
+                    ${escape(topCategory)}
+                  </b>
+
+                </div>
+
+
+              </div>
+
+            </div>
+
+          </article>
+
+        </div>
+
+
+        <!-- =========================
+             CATEGORY + TRANSACTIONS
+             ========================= -->
+
+        <div class="grid dashboard-bottom">
+
+
+          <!-- CATEGORY SPENDING -->
+
+          <article class="panel">
+
+            <div class="panel-header">
+
+              <div>
+
+                <h3>
+                  Category spending
+                </h3>
+
+                <p class="panel-subtitle">
+                  Where your money is going
+                </p>
+
+              </div>
+
+            </div>
+
+
+            ${
+              categoryEntries.length
+
+                ? `
+
+                  <div class="category-list">
+
+                    ${
+                      categoryEntries
+                        .slice(0, 6)
+                        .map(
+                          ([category, value]) => {
+
+                            const percentage =
+                              totalCategoryExpense > 0
+                                ? (
+                                    value /
+                                    totalCategoryExpense
+                                  ) * 100
+                                : 0;
+
+
+                            return `
+
+                              <div class="category-row">
+
+                                <div class="category-info">
+
+                                  <span>
+                                    ${escape(category)}
+                                  </span>
+
+                                  <strong>
+                                    ${money(value)}
+                                  </strong>
+
+                                </div>
+
+
+                                <div class="progress">
+
+                                  <span
+                                    style="width:${Math.min(
+                                      percentage,
+                                      100
+                                    )}%;"
+                                    title="${percentage.toFixed(1)}%"
+                                  ></span>
+
+                                </div>
+
+
+                                <small
+                                  style="
+                                    display:block;
+                                    margin-top:4px;
+                                    color:var(--muted);
+                                  "
+                                >
+                                  ${percentage.toFixed(1)}%
+                                </small>
+
+                              </div>
+
+                            `;
+
+                          }
+                        )
+                        .join('')
+                    }
+
+                  </div>
+
+                `
+
+                : `
+
+                  <div class="category-list">
+
+                    <div class="category-row">
+
+                      <div class="category-info">
+
+                        <span>
+                          Top category
+                        </span>
+
+                        <strong>
+                          N/A
+                        </strong>
+
+                      </div>
+
+
+                      <div class="progress">
+
+                        <span
+                          style="width:0%"
+                        ></span>
+
+                      </div>
+
+                    </div>
+
+
+                    <p class="empty">
+                      Add expense transactions to see
+                      category-wise spending here.
+                    </p>
+
+                  </div>
+
+                `
+            }
+
+          </article>
+
+
+          <!-- RECENT TRANSACTIONS -->
+
+          <article class="panel">
+
+            <div class="panel-header">
+
+              <div>
+
+                <h3>
+                  Recent transactions
+                </h3>
+
+                <p class="panel-subtitle">
+                  Your latest financial activity
+                </p>
+
+              </div>
+
+            </div>
+
+
+            ${transactions(recentTransactions)}
+
+          </article>
+
+        </div>
+
+
+        <!-- =========================
+             RECURRING + SNAPSHOT
+             ========================= -->
+
+        <div
+          class="grid dashboard-bottom"
+          style="margin-top:16px"
+        >
+
+
+          <!-- UPCOMING RECURRING -->
+
+          <article class="panel">
+
+            <div class="panel-header">
+
+              <div>
+
+                <h3>
+                  Upcoming recurring payments
+                </h3>
+
+                <p class="panel-subtitle">
+                  Keep track of scheduled expenses
+                </p>
+
+              </div>
+
+            </div>
+
+
+            ${
+              (d.upcomingRecurringExpenses || [])
+                .map(
+                  x => `
+
+                    <div class="metric-row">
+
+                      <span>
+
+                        ${escape(x.description)}
+
+                        <small>
+                          (${escape(x.frequency)})
+                        </small>
+
+                      </span>
+
+                      <b>
+                        ${money(x.amount)}
+                      </b>
+
+                    </div>
+
+                  `
+                )
+                .join('')
+
+              ||
+              '<p class="empty">No recurring payments.</p>'
+            }
+
+          </article>
+
+
+          <!-- FINANCIAL SNAPSHOT -->
+
+          <article class="panel">
+
+            <div class="panel-header">
+
+              <div>
+
+                <h3>
+                  Financial snapshot
+                </h3>
+
+                <p class="panel-subtitle">
+                  Key indicators for your finances
+                </p>
+
+              </div>
+
+            </div>
+
 
             <div class="metric-list">
+
+
               <div class="metric-row">
-                <span>Monthly expense</span>
-                <b>${money(monthly)}</b>
+
+                <span>
+                  Today's expenses
+                </span>
+
+                <b>
+                  ${money(d.todayExpense)}
+                </b>
+
               </div>
+
+
               <div class="metric-row">
-                <span>Savings rate</span>
-                <b>${savings.toFixed(1)}%</b>
+
+                <span>
+                  Top category
+                </span>
+
+                <b>
+                  ${escape(topCategory)}
+                </b>
+
               </div>
+
+
               <div class="metric-row">
-                <span>Top category</span>
-                <b>${escape(topCategory)}</b>
+
+                <span>
+                  Savings rate
+                </span>
+
+                <b>
+                  ${savings.toFixed(1)}%
+                </b>
+
               </div>
+
+
+              <div class="metric-row">
+
+                <span>
+                  Budget utilisation
+                </span>
+
+                <b>
+                  ${utilization.toFixed(1)}%
+                </b>
+
+              </div>
+
+
             </div>
 
-          </div>
+          </article>
 
-        </article>
-
-      </div>
+        </div>
 
 
-      <div class="grid dashboard-bottom">
-
-        <article class="panel">
-
-          <div class="panel-header">
-            <div>
-              <h3>Category spending</h3>
-              <p class="panel-subtitle">Where your money is going</p>
-            </div>
-          </div>
-
-          ${
-            categoryEntries.length
-              ? `
-                <div class="category-list">
-                  ${categoryEntries.slice(0, 6).map(([category, value]) => {
-                    const percentage = totalCategoryExpense > 0
-                      ? (value / totalCategoryExpense) * 100
-                      : 0;
-                    return `
-                      <div class="category-row">
-                        <div class="category-info">
-                          <span>${escape(category)}</span>
-                          <strong>${money(value)}</strong>
-                        </div>
-                        <div class="progress">
-                          <span style="width:${Math.min(percentage, 100)}%;" title="${percentage.toFixed(1)}%"></span>
-                        </div>
-                        <small style="display:block;margin-top:4px;color:var(--muted);">
-                          ${percentage.toFixed(1)}%
-                        </small>
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-              `
-              : `
-                <div class="category-list">
-                  <div class="category-row">
-                    <div class="category-info">
-                      <span>Top category</span>
-                      <strong>N/A</strong>
-                    </div>
-                    <div class="progress"><span style="width:0%"></span></div>
-                  </div>
-                  <p class="empty">Add expense transactions to see category-wise spending here.</p>
-                </div>
-              `
-          }
-
-        </article>
+      `;
 
 
-        <article class="panel">
+      /* =========================================================
+         WEEK NAVIGATION
+         ========================================================= */
 
-          <div class="panel-header">
-            <div>
-              <h3>Recent transactions</h3>
-              <p class="panel-subtitle">Your latest financial activity</p>
-            </div>
-          </div>
-
-          ${transactions(recentTransactions)}
-
-        </article>
-
-      </div>
+      let weekOffset =
+        trend?.weekOffset ?? 0;
 
 
-      <div class="grid dashboard-bottom" style="margin-top:16px">
+      async function loadTrend(offset) {
 
-        <article class="panel">
+        try {
 
-          <div class="panel-header">
-            <div>
-              <h3>Upcoming recurring payments</h3>
-              <p class="panel-subtitle">Keep track of scheduled expenses</p>
-            </div>
-          </div>
-
-          ${
-            (d.upcomingRecurringExpenses || [])
-              .map(x => `
-                <div class="metric-row">
-                  <span>${escape(x.description)} <small>(${escape(x.frequency)})</small></span>
-                  <b>${money(x.amount)}</b>
-                </div>
-              `)
-              .join('')
-            || '<p class="empty">No recurring payments.</p>'
-          }
-
-        </article>
+          const t =
+            await api.trend(offset);
 
 
-        <article class="panel">
+          weekOffset =
+            t.weekOffset;
 
-          <div class="panel-header">
-            <div>
-              <h3>Financial snapshot</h3>
-              <p class="panel-subtitle">Key indicators for your finances</p>
-            </div>
-          </div>
 
-          <div class="metric-list">
-            <div class="metric-row">
-              <span>Today's expenses</span>
-              <b>${money(d.todayExpense)}</b>
-            </div>
-            <div class="metric-row">
-              <span>Top category</span>
-              <b>${escape(topCategory)}</b>
-            </div>
-            <div class="metric-row">
-              <span>Savings rate</span>
-              <b>${savings.toFixed(1)}%</b>
-            </div>
-            <div class="metric-row">
-              <span>Budget utilisation</span>
-              <b>${utilization.toFixed(1)}%</b>
-            </div>
-          </div>
+          $('#trend-chart-body').innerHTML =
+            trendChartHtml(t);
 
-        </article>
 
-      </div>
+          $('#trend-range-label').textContent =
+            t.rangeLabel || '';
 
-    `;
-  }
+
+          $('#trend-next').disabled =
+            !!t.isCurrentWeek;
+
+        } catch (error) {
+
+          console.error(
+            'Unable to load expense trend:',
+            error
+          );
+
+          toast(
+            'Unable to load expense trend',
+            true
+          );
+
+        }
+
+      }
+
+
+      $('#trend-prev')?.addEventListener(
+        'click',
+        () => loadTrend(weekOffset - 1)
+      );
+
+
+      $('#trend-next')?.addEventListener(
+        'click',
+        () => loadTrend(weekOffset + 1)
+      );
+
+    }
 
 
   /* =========================================================

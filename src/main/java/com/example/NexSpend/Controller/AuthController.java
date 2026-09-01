@@ -47,7 +47,10 @@ public class AuthController {
     ) {
         AuthResponseDTO response = userService.login(dto);
 
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok()
+                .header("Cache-Control", "no-store")
+                .header("Pragma", "no-cache")
+                .body(response);
     }
 
     @GetMapping("/activate")
@@ -82,7 +85,7 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<RefreshTokenResponse> refreshToken(
-            @RequestBody RefreshTokenRequest request) {
+            @Valid @RequestBody RefreshTokenRequest request) {
 
         RefreshToken token = refreshTokenService
                 .findByToken(request.getRefreshToken())
@@ -94,10 +97,27 @@ public class AuthController {
                 .loadUserByUsername(token.getUser().getEmail());
 
         String newAccessToken = jwtService.generateToken(userDetails);
+        RefreshToken rotatedToken = refreshTokenService.createRefreshToken(token.getUser().getId());
 
-        return ResponseEntity.ok(RefreshTokenResponse.builder()
-                .accessToken(newAccessToken)
-                .build());
+        return ResponseEntity.ok()
+                .header("Cache-Control", "no-store")
+                .header("Pragma", "no-cache")
+                .body(RefreshTokenResponse.builder()
+                        .accessToken(newAccessToken)
+                        .refreshToken(rotatedToken.getRawToken())
+                        .tokenType("Bearer")
+                        .build());
+    }
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @Valid @RequestBody RefreshTokenRequest request) {
+
+        // Revocation works even when the access token has already expired.
+        refreshTokenService.deleteByToken(request.getRefreshToken());
+
+        return ResponseEntity.noContent()
+                .header("Cache-Control", "no-store")
+                .build();
     }
 }
 

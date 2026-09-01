@@ -37,7 +37,7 @@ public class RecurringExpenseRequestDTO {
 
     @NotNull(message = "Frequency is required")
     @EnumValidator(enumClass = Frequency.class, message = "Invalid frequency. Allowed: WEEKLY, MONTHLY, YEARLY")
-    private String frequency;   // stays String for JSON input, validated against enum
+    private String frequency;
 
     @NotNull(message = "Start date is required")
     private LocalDateTime startDate;

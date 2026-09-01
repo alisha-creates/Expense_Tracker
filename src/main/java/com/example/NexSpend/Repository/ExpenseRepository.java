@@ -20,52 +20,6 @@ import java.util.List;
 public interface ExpenseRepository extends JpaRepository<Expense, Long>, JpaSpecificationExecutor<Expense> {
     Page<Expense> findByUserId(Long userId, Pageable pageable);
 
-    Page<Expense> findByUserIdAndCategory(
-            Long userId,
-            Category category,
-            Pageable pageable
-    );
-
-    Page<Expense> findByUserIdAndType(
-            Long userId,
-            ExpenseType expenseType,
-            Pageable pageable
-    );
-
-    Page<Expense> findByUserIdAndDateBetween(Long userId,
-                                             LocalDateTime startDate,
-                                             LocalDateTime endDate,
-                                             Pageable pageable
-    );
-
-    Page<Expense> findByUserIdAndCategoryAndDateBetween(
-            Long userId,
-            Category category,
-            LocalDateTime startDate,
-            LocalDateTime endDate,
-            Pageable pageable
-    );
-
-    Page<Expense> findByUserIdAndTypeAndCategory(
-            Long userId,
-            ExpenseType expenseType,
-            Category category,
-            Pageable pageable
-    );
-
-    Page<Expense> findByUserIdAndTypeAndDateBetween(
-            Long userId,
-            ExpenseType expenseType,
-            LocalDateTime startDate,
-            LocalDateTime endDate,
-            Pageable pageable
-    );
-
-    Page<Expense> findByUserIdAndDescriptionContainingIgnoreCase(
-            Long userId,
-            String keyword,
-            Pageable pageable
-    );
 
     List<Expense> findTop10ByUserIdOrderByDateDesc(Long userId);
 
@@ -75,23 +29,10 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long>, JpaSpec
             LocalDateTime endOfDay
     );
 
-    List<Expense> findByUserIdAndDateBetweenOrderByDateAsc(
-            Long userId,
-            LocalDateTime startDate,
-            LocalDateTime endDate
-    );
-
-    Long countByUser(User user);
-
-    List<Expense> findAllByUserId(Long userId);
-
-    Page<Expense> findByUserIdAndDeletedFalse(Long userId, Pageable pageable);
-
     @Modifying
-    @Query("DELETE FROM Expense e WHERE e.user.id = :userId")
+    @Query(value = "DELETE FROM expenses WHERE user_id = :userId", nativeQuery = true)
     void permanentlyDeleteByUserId(@Param("userId") Long userId);
 
-    // Dashboard - total by type
     @Query("SELECT COALESCE(SUM(e.amount), 0) FROM Expense e WHERE e.user.id = :userId AND e.type = :type")
     BigDecimal sumByUserIdAndType(@Param("userId") Long userId, @Param("type") ExpenseType type);
 
@@ -101,7 +42,6 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long>, JpaSpec
     @Query("SELECT COALESCE(SUM(e.amount),0) FROM Expense e WHERE e.user.id = :userId AND e.type = 'EXPENSE' AND e.date BETWEEN :startDate AND :endDate")
     BigDecimal sumMonthlyExpense(@Param("userId") Long userId, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
 
-    // Dashboard - trend (last 7 days)
     @Query("SELECT DATE(e.date), SUM(e.amount) FROM Expense e WHERE e.user.id = :userId AND e.type = 'EXPENSE' AND e.date >= :startDate GROUP BY DATE(e.date) ORDER BY DATE(e.date)")
     List<Object[]> expenseTrend(@Param("userId") Long userId, @Param("startDate") LocalDateTime startDate);
 
@@ -130,4 +70,7 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long>, JpaSpec
             "WHERE e.user.id = :userId AND e.type = 'EXPENSE' " +
             "GROUP BY e.category")
     List<Object[]> sumExpenseByCategory(@Param("userId") Long userId);
+
+    @Query("SELECT DATE(e.date), SUM(e.amount) FROM Expense e WHERE e.user.id = :userId AND e.type = 'EXPENSE' AND e.date BETWEEN :startDate AND :endDate GROUP BY DATE(e.date) ORDER BY DATE(e.date)")
+    List<Object[]> expenseTrendBetween(@Param("userId") Long userId, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
 }

@@ -738,6 +738,35 @@ select:focus {
   font-size: 10px;
 }
 
+.trend-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trend-nav-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--teal-dark);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trend-nav-btn:hover:not(:disabled) {
+  background: var(--teal-light);
+}
+
+.trend-nav-btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
 
 /* =========================================================
    ANALYTICS

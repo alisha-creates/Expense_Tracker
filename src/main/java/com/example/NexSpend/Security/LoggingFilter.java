@@ -17,45 +17,38 @@ import java.time.LocalDateTime;
 @Slf4j
 @Component
 public class LoggingFilter extends OncePerRequestFilter {
-
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return !request.getRequestURI().startsWith("/api/");
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
-
-        ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request,1024);
-        ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
         long startTime = System.currentTimeMillis();
 
         try {
-            filterChain.doFilter(requestWrapper, responseWrapper);
+            filterChain.doFilter(request, response);
         } finally {
             long duration = System.currentTimeMillis() - startTime;
 
-            String requestBody = getStringFromByteArray(requestWrapper.getContentAsByteArray());
-            String responseBody = getStringFromByteArray(responseWrapper.getContentAsByteArray());
+            String user = request.getUserPrincipal() != null
+                    ? request.getUserPrincipal().getName()
+                    : "Anonymous";
 
-            log.info("=== API Request ===");
-            log.info("Time: {}", LocalDateTime.now());
-            log.info("Method: {} {}", requestWrapper.getMethod(), requestWrapper.getRequestURI());
-            log.info("User: {}", requestWrapper.getUserPrincipal() != null ? requestWrapper.getUserPrincipal().getName() : "Anonymous");
-            log.info("Request Body: {}", requestBody.isEmpty() ? "[EMPTY]" : requestBody);
-            log.info("Status: {} | Duration: {}ms", responseWrapper.getStatus(), duration);
-            log.info("Response Body: {}", responseBody.length() > 500
-                    ? responseBody.substring(0, 500) + "..."
-                    : responseBody);
-            log.info("=== End Request ===\n");
-
-            responseWrapper.copyBodyToResponse();
+            log.info(
+                    "API Request | time={} | method={} | path={} | user={} | status={} | duration={}ms",
+                    LocalDateTime.now(),
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    user,
+                    response.getStatus(),
+                    duration
+            );
         }
-    }
-
-    private String getStringFromByteArray(byte[] bytes) {
-        return bytes.length > 0 ? new String(bytes, StandardCharsets.UTF_8) : "";
     }
 }

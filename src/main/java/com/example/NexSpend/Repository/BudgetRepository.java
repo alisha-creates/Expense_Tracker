@@ -34,6 +34,6 @@ public interface BudgetRepository extends JpaRepository<Budget, Long> {
     Optional<Budget> findByIdAndDeletedFalse(Long id);
 
     @Modifying
-    @Query("DELETE FROM Budget b WHERE b.user.id = :userId")
+    @Query(value = "DELETE FROM budgets WHERE user_id = :userId", nativeQuery = true)
     void permanentlyDeleteByUserId(@Param("userId") Long userId);
 }

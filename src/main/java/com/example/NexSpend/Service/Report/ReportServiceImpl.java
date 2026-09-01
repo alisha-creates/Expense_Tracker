@@ -49,28 +49,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * NOTE ON WHAT WAS FIXED vs. THE ORIGINAL FILE:
- *
- * 1) The original file declared generateMonthlyPdfReport(User) TWICE, and declared
- *    addInfoCell / addSummaryCell / addStatisticCell / addTableHeader / createPdfCell (createCell) /
- *    formatCurrency TWICE each. Java does not allow two methods with the same signature in one
- *    class, so the file could not compile. Only one copy of each method is kept below.
- * 2) Duplicate/repeated imports were removed, and unused imports (CellRangeAddress, XSSFCellStyle,
- *    Comparator) were dropped.
- * 3) All the large commented-out "legacy" implementations at the bottom of the class were removed
- *    since they were dead code and not needed to compile or run.
- * 4) Percentage math was made consistent. Previously some percentage values were pre-multiplied by
- *    100 and then written into an Excel cell formatted as "0.00%" (which itself multiplies the raw
- *    value by 100 for display) -> this produced numbers like "2500.00%" instead of "25.00%" in some
- *    sheets, while other sheets divided by 100 again to compensate. All percentage-styled Excel
- *    cells now store a plain fraction (0-1), so "0.00%" renders correctly everywhere.
- * 5) Null-safety kept/added for amounts, categories, and repository sums.
- * 6) Recurring expenses are now pulled from the real RecurringExpense entity/repository instead of
- *    being guessed from the transaction description. Both reports now have a dedicated Recurring
- *    Expenses section. The "Recurring" (Yes/No) column was removed from the transaction tables, and
- *    "Created At" columns were dropped everywhere in favor of "Updated At" only.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)

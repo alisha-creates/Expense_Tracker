@@ -3,6 +3,7 @@ package com.example.NexSpend.Service.RefreshToken;
 import com.example.NexSpend.Entity.RefreshToken;
 import com.example.NexSpend.Entity.User;
 import com.example.NexSpend.Exception.UserNotFoundException;
+import com.example.NexSpend.Exception.RefreshTokenExpiredException;
 import com.example.NexSpend.Repository.RefreshTokenRepository;
 import com.example.NexSpend.Repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,13 +11,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenServiceImpl implements RefreshTokenService {
-
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
 
@@ -26,7 +29,6 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     public RefreshToken createRefreshToken(Long userId) {
 
-        // Find the user
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
                         new UserNotFoundException(
@@ -34,34 +36,29 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                         )
                 );
 
-        /*
-         * Check whether this user already has a refresh token.
-         * Since user_id is unique in refresh_token table,
-         * we update the existing token instead of creating
-         * another row.
-         */
         RefreshToken refreshToken = refreshTokenRepository
                 .findByUserId(userId)
                 .orElseGet(RefreshToken::new);
 
-        // Set / update the user
         refreshToken.setUser(user);
 
-        // Generate a new refresh token
-        refreshToken.setToken(UUID.randomUUID().toString());
+        String rawToken = UUID.randomUUID().toString() + UUID.randomUUID();
+        refreshToken.setToken(hashToken(rawToken));
 
-        // Set new expiry time
         refreshToken.setExpiryDate(
                 Instant.now().plusMillis(refreshDurationMs)
         );
 
-        // Save existing token or create a new one
+        refreshToken.setRawToken(rawToken);
         return refreshTokenRepository.save(refreshToken);
     }
 
     @Override
     public Optional<RefreshToken> findByToken(String token) {
-        return refreshTokenRepository.findByToken(token);
+        if (token == null || token.isBlank()) {
+            return Optional.empty();
+        }
+        return refreshTokenRepository.findByToken(hashToken(token));
     }
 
     @Override
@@ -71,10 +68,28 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
             refreshTokenRepository.delete(token);
 
-            throw new RuntimeException("Refresh token expired");
+            throw new RefreshTokenExpiredException("Refresh token expired. Please sign in again.");
         }
 
         return token;
+    }
+
+    @Override
+    public void deleteByToken(String rawToken) {
+        if (rawToken == null || rawToken.isBlank()) {
+            return;
+        }
+
+        refreshTokenRepository.deleteByToken(hashToken(rawToken));
+    }
+
+    @Override
+    public void deleteByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+
+        userRepository.findByEmail(email).ifPresent(refreshTokenRepository::deleteByUser);
     }
 
     @Override
@@ -88,5 +103,19 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 );
 
         refreshTokenRepository.deleteByUser(user);
+    }
+
+    private String hashToken(String rawToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm is unavailable", e);
+        }
     }
 }
